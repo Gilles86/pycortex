@@ -40,12 +40,12 @@ class SVGOverlay(object):
         list of layers of svg file to extract. If None, extracts all overlay layers 
         (i.e. all layers that do not contain images)
     """
-    def __init__(self, svgfile, coords=None, overlays_available=None):
+    def __init__(self, svgfile, coords=None, coord_limits=None, overlays_available=None):
         self.svgfile = svgfile
         self.overlays_available = overlays_available
         self.reload()
         if coords is not None:
-            self.set_coords(coords)
+            self.set_coords(coords, coord_limits)
 
     def reload(self):
         """Initial load of data from svgfile
@@ -64,13 +64,20 @@ class SVGOverlay(object):
             layer = Overlay(self, layer)
             self.layers[layer.name] = layer
 
-    def set_coords(self, coords):
+    def set_coords(self, coords, coord_limits=None):
         """Unclear what this does. James??"""
         # Normalize coordinates 0-1
         print('init: range coords: {}, {}'.format(coords.min(0), coords.max(0)))
-        if np.any(coords.max(0) > 1) or np.any(coords.min(0) < 0):
-            coords -= coords.min(0)
-            coords /= coords.max(0)
+        if coord_limits is not None:
+            print('yo')
+            print(coord_limits)
+            coords -= coord_limits[:2]
+            coords /= coord_limits[2:]
+        else:
+            if np.any(coords.max(0) > 1) or np.any(coords.min(0) < 0):
+                coords -= coords.min(0)
+                coords /= coords.max(0)
+
         # Renormalize coordinates to shape of svg
         print('svgshape: {}'.format(self.svgshape))
         print('init: range coords: {}, {}'.format(coords.min(0), coords.max(0)))
@@ -619,15 +626,18 @@ def make_svg(pts, polys):
 
     return svg
 
-def get_overlay(subject, svgfile, pts, polys, remove_medial=True,
+def get_overlay(subject, svgfile, pts, polys, remove_medial=False,
                 overlays_available=None, **kwargs):
     """Return a python represent of the overlays present in `svgfile`
 
     """
     cullpts = pts[:,:2]
+    valid = np.unique(polys)
+
     if remove_medial:
-        valid = np.unique(polys)
         cullpts = cullpts[valid]
+
+    coord_limits = np.hstack((cullpts[valid].min(0), cullpts[valid].max(0)))
 
     if not os.path.exists(svgfile):
         # Overlay file does not exist yet! We need to create and populate it
@@ -637,7 +647,7 @@ def get_overlay(subject, svgfile, pts, polys, remove_medial=True,
         with open(svgfile, "wb") as fp:
             fp.write(make_svg(pts.copy(), polys).encode())
 
-        svg = SVGOverlay(svgfile, coords=cullpts, **kwargs)
+        svg = SVGOverlay(svgfile, coords=cullpts, coord_limits=coord_limits, **kwargs)
 
         ## Add default layers
         from .database import db
@@ -655,7 +665,8 @@ def get_overlay(subject, svgfile, pts, polys, remove_medial=True,
 
     else:
         svg = SVGOverlay(svgfile, 
-                         coords=cullpts, 
+                         coords=cullpts,
+                         coord_limits=coord_limits,
                          overlays_available=overlays_available,
                          **kwargs)
     
