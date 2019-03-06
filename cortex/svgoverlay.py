@@ -67,11 +67,15 @@ class SVGOverlay(object):
     def set_coords(self, coords):
         """Unclear what this does. James??"""
         # Normalize coordinates 0-1
+        print('init: range coords: {}, {}'.format(coords.min(0), coords.max(0)))
         if np.any(coords.max(0) > 1) or np.any(coords.min(0) < 0):
             coords -= coords.min(0)
             coords /= coords.max(0)
         # Renormalize coordinates to shape of svg
+        print('svgshape: {}'.format(self.svgshape))
+        print('init: range coords: {}, {}'.format(coords.min(0), coords.max(0)))
         self.coords = coords * self.svgshape
+        print('init: range coords: {}, {}'.format(self.coords.min(0), self.coords.max(0)))
         # Update of scipy (0.16+) means that cKDTree hangs / takes absurdly long to compute with new default
         # balanced_tree=True. Seems only to be true on Mac OS, for whatever reason. Possibly a broken
         # C library, unclear. Setting balanced_tree=False seems to resolve the issue, thus going with that for now
@@ -594,9 +598,14 @@ def scrub(svgfile, overlays_available=None):
 def make_svg(pts, polys):
     from .polyutils import trace_poly, boundary_edges
     pts = pts.copy()
-    pts -= pts.min(0)
-    pts *= 1024 / pts.max(0)[1]
+
+    # Make sure that the range of the SVG pertains to points that
+    # are actually used (otherwise range is off)
+    valid = np.unique(polys)
+    pts -= pts[valid].min(0)
+    pts *= 1024 / pts[valid].max(0)[1]
     pts[:,1] = 1024 - pts[:,1]
+
     path = ""
     polyiter = trace_poly(boundary_edges(polys))
     for poly in [next(iter(polyiter)), next(iter(polyiter))]: #[polyiter.next(), polyiter.next()]:
@@ -604,13 +613,13 @@ def make_svg(pts, polys):
         path += ', '.join(['%f %f'%tuple(pts[p, :2]) for p in poly])
         path += 'Z '
 
-    w, h = pts.max(0)[:2]
+    w, h = pts[valid].max(0)[:2]
     with open(os.path.join(cwd, "svgbase.xml")) as fp:
         svg = fp.read().format(width=w, height=h, clip=path)
 
     return svg
 
-def get_overlay(subject, svgfile, pts, polys, remove_medial=False, 
+def get_overlay(subject, svgfile, pts, polys, remove_medial=True,
                 overlays_available=None, **kwargs):
     """Return a python represent of the overlays present in `svgfile`
 
@@ -659,9 +668,6 @@ def get_overlay(subject, svgfile, pts, polys, remove_medial=False,
         for layer in ['sulci', 'cutouts', 'display']:
             if layer not in svg.layers:
                 svg.add_layer(layer)
-
-    if remove_medial:
-        return svg, valid
 
     return svg
 

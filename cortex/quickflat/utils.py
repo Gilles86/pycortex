@@ -300,20 +300,25 @@ def _make_flatmask(subject, height=1024):
     from .. import polyutils
     from PIL import Image, ImageDraw
     pts, polys = db.get_surf(subject, "flat", merge=True, nudge=True)
+
+    valid = np.unique(polys)
+    fmin = pts[valid].min(0)
+    fmax = pts[valid].max(0)
+
     bounds = polyutils.trace_poly(polyutils.boundary_edges(polys))
     try:
         left, right = bounds.next(), bounds.next() # python 2.X
     except AttributeError:
         left, right = next(bounds), next(bounds) # python 3.X
-    aspect = (height / (pts.max(0) - pts.min(0))[1])
-    lpts = (pts[left] - pts.min(0)) * aspect
-    rpts = (pts[right] - pts.min(0)) * aspect
+    aspect = (height / (fmax - fmin)[1])
+    lpts = (pts[left] - fmin) * aspect
+    rpts = (pts[right] - fmin) * aspect
 
-    im = Image.new('L', (int(aspect * (pts.max(0) - pts.min(0))[0]), height))
+    im = Image.new('L', (int(aspect * (fmax - fmin)[0]), height))
     draw = ImageDraw.Draw(im)
     draw.polygon(lpts[:,:2].ravel().tolist(), fill=255)
     draw.polygon(rpts[:,:2].ravel().tolist(), fill=255)
-    extents = np.hstack([pts.min(0), pts.max(0)])[[0,3,1,4]]
+    extents = np.hstack([fmin, fmax])[[0,3,1,4]]
 
     return np.array(im).T > 0, extents
 
@@ -322,7 +327,7 @@ def _make_vertex_cache(subject, height=1024):
     from scipy.spatial import cKDTree
     flat, polys = db.get_surf(subject, "flat", merge=True, nudge=True)
     valid = np.unique(polys)
-    fmax, fmin = flat.max(0), flat.min(0)
+    fmax, fmin = flat[valid].max(0), flat[valid].min(0)
     size = fmax - fmin
     aspect = size[0] / size[1]
     width = int(aspect * height)
@@ -341,7 +346,7 @@ def _make_pixel_cache(subject, xfmname, height=1024, thick=32, depth=0.5, sample
     from scipy.spatial import Delaunay
     flat, polys = db.get_surf(subject, "flat", merge=True, nudge=True)
     valid = np.unique(polys)
-    fmax, fmin = flat.max(0), flat.min(0)
+    fmax, fmin = flat[valid].max(0), flat[valid].min(0)
     size = fmax - fmin
     aspect = size[0] / size[1]
     width = int(aspect * height)
