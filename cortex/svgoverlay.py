@@ -40,12 +40,18 @@ class SVGOverlay(object):
         list of layers of svg file to extract. If None, extracts all overlay layers 
         (i.e. all layers that do not contain images)
     """
-    def __init__(self, svgfile, coords=None, coord_limits=None, overlays_available=None):
+    def __init__(self, svgfile, coords=None, polys=None, overlays_available=None):
         self.svgfile = svgfile
         self.overlays_available = overlays_available
         self.reload()
+
         if coords is not None:
-            self.set_coords(coords, coord_limits)
+
+            if polys is None:
+                raise Exception("Need polys to properly scale range of pts")
+
+            valid = np.unique(polys)
+            self.set_coords(coords, valid)
 
     def reload(self):
         """Initial load of data from svgfile
@@ -64,25 +70,19 @@ class SVGOverlay(object):
             layer = Overlay(self, layer)
             self.layers[layer.name] = layer
 
-    def set_coords(self, coords, coord_limits=None):
+    def set_coords(self, coords, valid=None):
         """Unclear what this does. James??"""
         # Normalize coordinates 0-1
-        print('init: range coords: {}, {}'.format(coords.min(0), coords.max(0)))
-        if coord_limits is not None:
-            print('yo')
-            print(coord_limits)
-            coords -= coord_limits[:2]
-            coords /= coord_limits[2:]
+        if valid is not None:
+            coords -= coords[valid].min(0)[:2]
+            coords /= coords[valid].max(0)[:2]
         else:
             if np.any(coords.max(0) > 1) or np.any(coords.min(0) < 0):
                 coords -= coords.min(0)
                 coords /= coords.max(0)
 
         # Renormalize coordinates to shape of svg
-        print('svgshape: {}'.format(self.svgshape))
-        print('init: range coords: {}, {}'.format(coords.min(0), coords.max(0)))
         self.coords = coords * self.svgshape
-        print('init: range coords: {}, {}'.format(self.coords.min(0), self.coords.max(0)))
         # Update of scipy (0.16+) means that cKDTree hangs / takes absurdly long to compute with new default
         # balanced_tree=True. Seems only to be true on Mac OS, for whatever reason. Possibly a broken
         # C library, unclear. Setting balanced_tree=False seems to resolve the issue, thus going with that for now
@@ -632,12 +632,6 @@ def get_overlay(subject, svgfile, pts, polys, remove_medial=False,
 
     """
     cullpts = pts[:,:2]
-    valid = np.unique(polys)
-
-    if remove_medial:
-        cullpts = cullpts[valid]
-
-    coord_limits = np.hstack((cullpts[valid].min(0), cullpts[valid].max(0)))
 
     if not os.path.exists(svgfile):
         # Overlay file does not exist yet! We need to create and populate it
@@ -647,7 +641,7 @@ def get_overlay(subject, svgfile, pts, polys, remove_medial=False,
         with open(svgfile, "wb") as fp:
             fp.write(make_svg(pts.copy(), polys).encode())
 
-        svg = SVGOverlay(svgfile, coords=cullpts, coord_limits=coord_limits, **kwargs)
+        svg = SVGOverlay(svgfile, coords=cullpts, polys=polys, **kwargs)
 
         ## Add default layers
         from .database import db
@@ -666,7 +660,7 @@ def get_overlay(subject, svgfile, pts, polys, remove_medial=False,
     else:
         svg = SVGOverlay(svgfile, 
                          coords=cullpts,
-                         coord_limits=coord_limits,
+                         polys=polys,
                          overlays_available=overlays_available,
                          **kwargs)
     
