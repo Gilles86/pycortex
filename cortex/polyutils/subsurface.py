@@ -317,7 +317,7 @@ class SubsurfaceMixin(object):
         return lifted
 
     def get_geodesic_strip_patch(self, v0, v1, radius, room_factor=2, method='bb',
-                                 graph_search='astar', include_strip_coordinates=True):
+                                 graph_search='astar', include_strip_coordinates=True, m=1.0):
         """return patch that includes v0, v1, their geodesic path, and all points within some radius
 
         Algorithms
@@ -408,7 +408,7 @@ class SubsurfaceMixin(object):
         elif method == 'whole_surface':
 
             initial_surface = self
-            geodesic_path = self.geodesic_path(v0, v1)
+            geodesic_path = self.geodesic_path(v0, v1, m=m)
             strip_mask = self.get_geodesic_patch(
                 vertex=geodesic_path,
                 radius=radius,
